@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -20,6 +22,10 @@ namespace iTunesRichPresence_Rewrite {
         private string _currentArtist;
         private string _currentTitle;
         private ITPlayerState _currentState;
+        private string path;
+
+        private IITFileOrCDTrack store;
+
         private int _currentPosition;
 
         private readonly DispatcherTimer _timer;
@@ -127,15 +133,43 @@ namespace iTunesRichPresence_Rewrite {
             _currentTitle = ITunes.CurrentTrack.Name;
             _currentState = ITunes.PlayerState;
             _currentPosition = ITunes.PlayerPosition;
+            int _currentAlbumCoverCount = ITunes.CurrentTrack.Artwork.Count;
+            string PREFIX = "itlps-";
 
-            var presence = new DiscordRpc.RichPresence{largeImageKey = "itunes_logo_big"};
+            foreach (var artT in ITunes.CurrentTrack.Artwork)
+            {
+                var art = artT as IITArtwork;
+                string ext = ".tmp";
+                switch (art.Format)
+                {
+                    case ITArtworkFormat.ITArtworkFormatBMP:
+                        ext = ".bmp";
+                        break;
+                    case ITArtworkFormat.ITArtworkFormatJPEG:
+                        ext = ".jpg";
+                        break;
+                    case ITArtworkFormat.ITArtworkFormatPNG:
+                        ext = ".png";
+                        break;
+                }
+
+                string path = Path.Combine(Path.GetTempPath(), PREFIX + Path.GetRandomFileName() + ext);
+                art.SaveArtworkToFile(path);
+                //Debug.WriteLine(path);
+            }
+
+            Debug.WriteLine("DB ID: "+ITunes.CurrentTrack.TrackDatabaseID);
+            Debug.WriteLine("Track ID: " + ITunes.CurrentTrack.trackID);
+            Debug.WriteLine("Artwork: " + ITunes.CurrentTrack.Artwork);
+
+            var presence = new DiscordRpc.RichPresence{largeImageKey = path};
             if (_currentState != ITPlayerState.ITPlayerStatePlaying) {
                 presence.details = TruncateString(RenderString(Settings.Default.PausedTopLine));
                 presence.state = TruncateString(RenderString(Settings.Default.PausedBottomLine));
             }
             else {
-                presence.details = TruncateString(RenderString(Settings.Default.PlayingTopLine));
-                presence.state = TruncateString(RenderString(Settings.Default.PlayingBottomLine));
+                presence.details = "["+_currentArtist+"](https://google.co.uk)"; //Embed top line
+                presence.state = _currentTitle; //Embed bottom line.
                 if (Settings.Default.DisplayPlaybackDuration) {
                     presence.startTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds() - _currentPosition;
                     presence.endTimestamp = DateTimeOffset.Now.ToUnixTimeSeconds() +
